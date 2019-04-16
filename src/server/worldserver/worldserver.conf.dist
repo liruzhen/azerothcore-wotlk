@@ -147,7 +147,12 @@ BindIP = "0.0.0.0"
 # PERFORMANCE SETTINGS
 #
 #    UseProcessors
-#        Description: Processors mask for Windows based multi-processor systems.
+#        Description: Processors mask for Windows and Linux based multi-processor systems.
+#        Example:  For a computer with 3 CPUs:
+#                     1 - 1st CPU only
+#                     2 - 2nd CPU only
+#                     4 - 3rd CPU only
+#                     6 - 2nd + 3rd CPUs, because "2 | 4" -> 6
 #        Default:     0  - (Selected by OS)
 #                     1+ - (Bit mask value of selected processors)
 
@@ -208,12 +213,30 @@ MaxOverspeedPings = 2
 GridUnload = 1
 
 #
+#    CloseIdleConnections
+#        Description: Automatically close idle connections.
+#                     SocketTimeOutTime and SocketTimeOutTimeActive determine when a connection is considered as idle.
+#        Default:     1 - (enable, Automatically close idle connections)
+#                     0 - (disable, Do not close idle connections)
+
+CloseIdleConnections = 1
+
+#
 #    SocketTimeOutTime
 #        Description: Time (in milliseconds) after which a connection being idle on the character
 #                     selection screen is disconnected.
 #        Default:     900000 - (15 minutes)
 
 SocketTimeOutTime = 900000
+
+#
+#    SocketTimeOutTimeActive
+#        Description: Time (in milliseconds) after which an idle connection is dropped while
+#                     logged into the world.
+#                     The client sends keepalive packets every 30 seconds. Values <= 30s are not recommended.
+#        Default:     60000 - (1 minute)
+
+SocketTimeOutTimeActive = 60000
 
 #
 #    SessionAddDelay
@@ -305,6 +328,15 @@ vmap.enableIndoorCheck = 1
 DetectPosCollision = 1
 
 #
+#    CheckGameObjectLoS
+#        Description: Include dynamic game objects (doors, chests etc.) in line of sight checks.
+#                     This increases CPU usage somewhat.
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled, may break some boss encounters)
+
+CheckGameObjectLoS = 1
+
+#
 #    TargetPosRecalculateRange
 #        Description: Max distance from movement target point (+moving unit size) and targeted
 #                     object (+size) after that new target movement point calculated.
@@ -344,7 +376,8 @@ LogDB.Opt.ClearTime = 1209600
 #    MaxCoreStuckTime
 #        Description: Time (in seconds) before the server is forced to crash if it is frozen.
 #        Default:     0   - (Disabled)
-#                     10+ - (Enabled, Recommended 10+)
+#                     10+ - (Enabled, Recommended 30+)
+# Note: If enabled and the setting is too low, it can cause unexpected crash.
 
 MaxCoreStuckTime = 0
 
@@ -467,6 +500,7 @@ LogFileLevel = 0
 #             2097152 - Anything related to guilds
 #             4194304 - Anything related to transports
 #             8388608 - Anything related to Warden anti cheat
+#            67108864 - Whenever KickPlayer() or CloseSocket() are called
 #
 #                       Simply add the values together to create a bitmask.
 #                       For more info see enum DebugLogFilters in Log.h
@@ -1225,6 +1259,14 @@ Instance.ResetTimeHour = 4
 Instance.UnloadDelay = 1800000
 
 #
+#    Quests.EnableQuestTracker
+#        Description: Store datas in the database about quest completion and abandonment to help finding out bugged quests.
+#        Default:     0  - (Disabled)
+#                     1  - (Enabled)
+
+Quests.EnableQuestTracker = 0
+
+#
 #    Quests.LowLevelHideDiff
 #        Description: Level difference between player and quest level at which quests are
 #                     considered low-level and are not shown via exclamation mark (!) at quest
@@ -1298,7 +1340,7 @@ Guild.BankEventLogRecordsCount = 25
 #
 #    MaxPrimaryTradeSkill
 #        Description: Maximum number of primary professions a character can learn.
-#        Range:       0-10
+#        Range:       0-11
 #        Default:     2
 
 MaxPrimaryTradeSkill = 2
@@ -1453,7 +1495,7 @@ BirthdayTime = 1222964635
 #
 #   IsContinentTransport.Enabled
 #        Description: Controls the continent transport (ships, zeppelins etc..)
-#        Default:     1 - (Enabled) 
+#        Default:     1 - (Enabled)
 #
 #
 
@@ -1461,11 +1503,11 @@ IsContinentTransport.Enabled = 1
 
 #
 #   IsPreloadedContinentTransport.Enabled
-#        Description: Should we preload the transport? 
+#        Description: Should we preload the transport?
 #           (Not recommended on low-end servers as it consumes 100% more ram)
 #           and it's not really necessary to be enabled.
 #
-#        Default:     0 - (Disabled) 
+#        Default:     0 - (Disabled)
 #
 #
 
@@ -2974,6 +3016,15 @@ Guild.AllowMultipleGuildMaster = 0
 ShowKickInWorld = 0
 
 #
+#     ShowBanInWorld
+#        Description: Determines whether a message is broadcasted to the entire server when a
+#                     player gets banned.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+
+ShowBanInWorld = 0
+
+#
 #     RecordUpdateTimeDiffInterval
 #        Description: Time (in milliseconds) update time diff is written to the log file.
 #                     Update diff can be used as a performance indicator. Diff < 300: good
@@ -3127,7 +3178,7 @@ EnableLoginAfterDC = 1
 
 #
 #     DontCacheRandomMovementPaths
-#        Description: Random movement paths (calculated using MoveMaps) can be cached to save cpu time, 
+#        Description: Random movement paths (calculated using MoveMaps) can be cached to save cpu time,
 #                     but this may use up considerable amount of memory and can be prevented by setting this option to 1.
 #                     Recommended setting for populated servers is having enough RAM and setting this to 0.
 #        Default:     0 - (cache paths, uses more memory)
@@ -3145,11 +3196,40 @@ MoveMaps.Enable = 1
 
 #
 #     Minigob.Manabonk.Enable
-#        Description: Enable/ Disable Minigob Manabonk 
+#        Description: Enable/ Disable Minigob Manabonk
 #        Default:     1
 
 Minigob.Manabonk.Enable = 1
 
+#
+
+#    Allow.IP.Based.Action.Logging
+#        Description: Logs actions, e.g. account login and logout to name a few, based on IP of current session.
+#        Default:     0 - (Disabled)
+#                     1 - (Enabled)
+ 
+Allow.IP.Based.Action.Logging = 0
+
+#     Calculate.Creature.Zone.Area.Data
+#        Description: Calculate at loading creature zoneId / areaId and save in creature table (WARNING: SLOW WORLD SERVER STARTUP)
+#        Default:     0  - (Do not show)
+
+Calculate.Creature.Zone.Area.Data = 0
+
+#
+#     Calculate.Gameoject.Zone.Area.Data
+#        Description: Calculate at loading gameobject zoneId / areaId and save in gameobject table (WARNING: SLOW WORLD SERVER STARTUP)
+#        Default:     0  - (Do not show)
+
+Calculate.Gameoject.Zone.Area.Data = 0
+
+#    LFG SETTINGS
+#
+#     Includes satellite to search for work elsewhere LFG
+#        Default: 0 - Disable  
+#                 1 - Enable  
+
+LFG.Location.All = 0
 
 #
 ###################################################################################################

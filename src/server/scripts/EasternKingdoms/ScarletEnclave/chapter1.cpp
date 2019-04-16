@@ -5,7 +5,6 @@
  */
 
 #include "ScriptMgr.h"
-#include "ScriptPCH.h"
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
 #include "Vehicle.h"
@@ -17,6 +16,7 @@
 #include "SpellInfo.h"
 #include "CreatureTextMgr.h"
 #include "PetAI.h"
+#include "SpellScript.h"
 
 // Ours
 enum eyeOfAcherus
@@ -164,12 +164,12 @@ class npc_death_knight_initiate : public CreatureScript
 public:
     npc_death_knight_initiate() : CreatureScript("npc_death_knight_initiate") { }
 
-    bool OnGossipSelect(Player* player, Creature* creature, uint32 /*sender*/, uint32 action)
+    bool OnGossipSelect(Player* player, Creature* creature, uint32 /*sender*/, uint32 action) override
     {
-        player->PlayerTalkClass->ClearMenus();
+        ClearGossipMenuFor(player);
         if (action == GOSSIP_ACTION_INFO_DEF)
         {
-            player->CLOSE_GOSSIP_MENU();
+            CloseGossipMenuFor(player);
 
             if (player->IsInCombat() || creature->IsInCombat())
                 return true;
@@ -186,7 +186,7 @@ public:
         return true;
     }
 
-    bool OnGossipHello(Player* player, Creature* creature)
+    bool OnGossipHello(Player* player, Creature* creature) override
     {
         if (player->GetQuestStatus(QUEST_DEATH_CHALLENGE) == QUEST_STATUS_INCOMPLETE && creature->IsFullHealth())
         {
@@ -197,14 +197,14 @@ public:
                 return true;
 
             if (!creature->AI()->GetData(player->GetGUIDLow()))
-                player->ADD_GOSSIP_ITEM(GOSSIP_ICON_CHAT, GOSSIP_ACCEPT_DUEL, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
+                AddGossipItemFor(player, GOSSIP_ICON_CHAT, GOSSIP_ACCEPT_DUEL, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF);
 
-            player->SEND_GOSSIP_MENU(player->GetGossipTextId(creature), creature->GetGUID());
+            SendGossipMenuFor(player, player->GetGossipTextId(creature), creature->GetGUID());
         }
         return true;
     }
 
-    CreatureAI* GetAI(Creature* creature) const
+    CreatureAI* GetAI(Creature* creature) const override
     {
         return new npc_death_knight_initiateAI(creature);
     }
@@ -217,8 +217,9 @@ public:
         uint64 _duelGUID;
         EventMap events;
         std::set<uint32> playerGUIDs;
+        uint32 timer = 0;
 
-        uint32 GetData(uint32 data) const
+        uint32 GetData(uint32 data) const override
         {
             if (data == DATA_IN_PROGRESS)
                 return _duelInProgress;
@@ -226,7 +227,7 @@ public:
             return playerGUIDs.find(data) != playerGUIDs.end();
         }
 
-        void Reset()
+        void Reset() override
         {
             _duelInProgress = false;
             _duelGUID = 0;
@@ -236,13 +237,16 @@ public:
             me->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNK_15);
         }
 
-        void SpellHit(Unit* caster, const SpellInfo* pSpell)
+        void SpellHit(Unit* caster, const SpellInfo* pSpell) override
         {
             if (!_duelInProgress && pSpell->Id == SPELL_DUEL)
             {
                 playerGUIDs.insert(caster->GetGUIDLow());
                 _duelGUID = caster->GetGUID();
                 _duelInProgress = true;
+
+                timer = 600000; // clear playerGUIDs after 10 minutes if no one initiates a duel
+                me->GetMotionMaster()->MoveFollow(caster, 2.0f, 0.0f);
 
                 events.ScheduleEvent(EVENT_SPEAK, 3000);
                 events.ScheduleEvent(EVENT_SPEAK+1, 7000);
@@ -253,7 +257,7 @@ public:
             }
         }
 
-       void DamageTaken(Unit* attacker, uint32& damage, DamageEffectType, SpellSchoolMask)
+        void DamageTaken(Unit* attacker, uint32& damage, DamageEffectType, SpellSchoolMask) override
         {
             if (attacker && _duelInProgress && attacker->IsControlledByPlayer())
             {
@@ -277,8 +281,21 @@ public:
             }
         }
 
-        void UpdateAI(uint32 diff)
+        void UpdateAI(uint32 diff) override
         {
+            if (timer != 0)
+            {
+                if (timer <= diff)
+                {
+                    timer = 0;
+                    playerGUIDs.clear();
+                }
+                else
+                {
+                    timer -= diff;
+                }
+            }
+
             events.Update(diff);
             switch (events.ExecuteEvent())
             {
@@ -491,7 +508,7 @@ public:
                     events.RepeatEvent(1000);
                     return;
             }
-            
+
             if (!UpdateVictim())
                 return;
 
@@ -715,7 +732,7 @@ public:
                 me->CastSpell(me, SPELL_DK_INITIATE_VISUAL, true);
 
                 if (Player* starter = ObjectAccessor::GetPlayer(*me, playerGUID))
-                    sCreatureTextMgr->SendChat(me, SAY_EVENT_ATTACK, NULL, CHAT_MSG_ADDON, LANG_ADDON, TEXT_RANGE_NORMAL, 0, TEAM_NEUTRAL, false, starter);
+                    Talk(SAY_EVENT_ATTACK, starter);
 
                 phase = PHASE_TO_ATTACK;
             }
@@ -877,7 +894,7 @@ class go_acherus_soul_prison : public GameObjectScript
 public:
     go_acherus_soul_prison() : GameObjectScript("go_acherus_soul_prison") { }
 
-    bool OnGossipHello(Player* player, GameObject* go)
+    bool OnGossipHello(Player* player, GameObject* go) override
     {
         if (Creature* anchor = go->FindNearestCreature(29521, 15))
             if (uint64 prisonerGUID = anchor->AI()->GetGUID())
@@ -1104,7 +1121,7 @@ class go_inconspicuous_mine_car : public GameObjectScript
 public:
     go_inconspicuous_mine_car() : GameObjectScript("go_inconspicuous_mine_car") { }
 
-    bool OnGossipHello(Player* player, GameObject* /*go*/)
+    bool OnGossipHello(Player* player, GameObject* /*go*/) override
     {
         if (player->GetQuestStatus(12701) == QUEST_STATUS_INCOMPLETE)
         {
@@ -1122,6 +1139,7 @@ public:
                 }
             }
         }
+        
         return true;
     }
 
